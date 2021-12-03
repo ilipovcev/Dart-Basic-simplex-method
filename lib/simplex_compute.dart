@@ -4,11 +4,29 @@ enum RESULT {
   unbounded
 }
 
+class Answer {
+  final int rowPosition;
+  final double value;
+  final String variableName;
+  Answer({
+    required this.rowPosition,
+    required this.value,
+    required this.variableName,
+  });
+
+
+  int get fractional => ((value - value.floor()) * 10000).floor();
+  bool get isInteger => value is int || value == value.roundToDouble();
+}
+
 class Simplex {
   late final int _rows;
   late final int _cols;
   late final List<List<double>> _table;
   bool _solutionIsUnbounded = false;
+  List<int> basisVars = [];
+  var listAnswers = List<Answer>.empty(growable: true); 
+  
 
   Simplex(int numOfConstraints, int numOfUnknowns) {
     _rows = numOfConstraints + 1;
@@ -32,16 +50,17 @@ class Simplex {
     }
     print(titlePrint);
     print(stringPrint);
-
-    // for (var i = 1; i < _cols; i++) {
-    //   print('x$i = ${_table[0][i-1].toStringAsFixed(3)}\t');
-    // }
   }
 
   fillTable(List<List<double>> data){
     for (var i = 0; i < _table.length; i++) {
       for (var j = 0; j < _table[i].length; j++) {
         _table[i][j] = data[i][j];
+      }
+    }
+    for (var i = 1; i < _cols; i++) {
+      if (i > (_cols - data.length)) {
+        basisVars.add(i);
       }
     }
   }
@@ -61,10 +80,65 @@ class Simplex {
     }
 
     int pivotRow = _findSmallestValue(ratios);
-    print('Pivot element on: $pivotColumn : $pivotRow\n');
+    print('Pivot row: $pivotRow');
+    print('Element on col $pivotColumn and row $pivotRow is pivot');
+    print('variable x${pivotColumn+1} to basis column in $pivotRow row\n');
+    _newBasisVar(pivotRow, pivotColumn);
+
     _formNextTableau(pivotRow, pivotColumn);
 
     return RESULT.notOptimal;
+  }
+
+  bool nonIntegerAnswer() {
+    bool hasIntegers = true;
+    for (var element in listAnswers) {
+      if (!element.isInteger) {
+        hasIntegers = false;
+        break;
+      }
+    }
+    return !hasIntegers;
+  }
+
+  findLargestAnswerFractional() {
+    Answer maxFractional = listAnswers.first;
+    for (var item in listAnswers) {
+      if (item.fractional > maxFractional.fractional) {
+        maxFractional = item;
+      }
+    }
+    print('Answer with max fractional: ${maxFractional.variableName}');
+    return maxFractional;
+  }
+
+  getAnswers() {
+    for (var i = 1; i < _rows; i++) {
+      if (basisVars.contains(i)) {
+        var index = basisVars.indexOf(i);
+        listAnswers.add(Answer(
+          rowPosition: i, 
+          value: _table[index][_cols-1].toDouble(), 
+          variableName: 'x$i'
+        ));
+      } else {
+        listAnswers.add(Answer(
+          rowPosition: i, 
+          value: 0.0, 
+          variableName: 'x$i'
+        ));
+      }
+    }
+    print('Answer: $listAnswers');
+  }
+
+  _newBasisVar(int toRow, int x) {
+    basisVars[toRow] = x + 1;
+    String basisVarString = '';
+    for (var e in basisVars) {
+      basisVarString += 'x$e\t';
+    }
+    print('Basis variables: $basisVarString\t');
   }
 
   _formNextTableau(int pivotRow, int pivotColumn){
@@ -99,6 +173,9 @@ class Simplex {
     for (var i = 0; i < rowNew.length; i++) {
       rowNew[i] = _table[pivotRow][i];
     }
+
+    print('New table:');
+    printTable();
   }
 
   List<double> _calculateRatios(int column){
@@ -204,6 +281,7 @@ class Simplex {
 
     if(vCount == _cols - 1){
       isOptimal = true;
+
     }
 
     return isOptimal;
